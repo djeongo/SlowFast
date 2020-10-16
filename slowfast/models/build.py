@@ -33,7 +33,7 @@ def build_model(cfg, gpu_id=None):
         ), "Cuda is not available. Please set `NUM_GPUS: 0 for running on CPUs."
 
     # Construct the model
-    name = cfg.MODEL.MODEL_NAME
+    name = cfg.MODEL.MODEL_NAME ## SlowFast
     model = MODEL_REGISTRY.get(name)(cfg)
 
     if cfg.NUM_GPUS:

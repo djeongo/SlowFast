@@ -144,7 +144,7 @@ def test(cfg):
             slowfast/config/defaults.py
     """
     # Set up environment.
-    du.init_distributed_training(cfg)
+    du.init_distributed_training(cfg)       ## Not relevant for GPU<=1
     # Set random seed from configs.
     np.random.seed(cfg.RNG_SEED)
     torch.manual_seed(cfg.RNG_SEED)
@@ -167,7 +167,7 @@ def test(cfg):
     test_loader = loader.construct_loader(cfg, "test")
     logger.info("Testing model for {} iterations".format(len(test_loader)))
 
-    if cfg.DETECTION.ENABLE:
+    if cfg.DETECTION.ENABLE: ## False by default
         assert cfg.NUM_GPUS == cfg.TEST.BATCH_SIZE or cfg.NUM_GPUS == 0
         test_meter = AVAMeter(len(test_loader), cfg, mode="test")
     else:
@@ -188,7 +188,7 @@ def test(cfg):
         )
 
     # Set up writer for logging to Tensorboard format.
-    if cfg.TENSORBOARD.ENABLE and du.is_master_proc(
+    if cfg.TENSORBOARD.ENABLE and du.is_master_proc(  ## TENSORBOARD.ENABLE false by default
         cfg.NUM_GPUS * cfg.NUM_SHARDS
     ):
         writer = tb.TensorboardWriter(cfg)
