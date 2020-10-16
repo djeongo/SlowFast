@@ -91,7 +91,11 @@ in slowfast
 $ python setup.py build develop
 
 # Train
-python tools/run_net.py --cfg configs/Charades/SLOWFAST_16x8_R50_multigrid.yaml DATA.PATH_TO_DATA_DIR /home/pius/sdc1/data/ DATA.PATH_PREFIX /home/pius/sdc1/data/Charades_v1_rgb NUM_GPUS 1 TRAIN.BATCH_SIZE 16 
+## Non-multigrid
+    python tools/run_net.py --cfg configs/Charades/SLOWFAST_16x8_R50.yaml DATA.PATH_TO_DATA_DIR /home/ubuntu/data/charades DATA.PATH_PREFIX /home/ubuntu/data/charades/Charades_v1_rgb NUM_GPUS 1 TRAIN.BATCH_SIZE 4
+## Multigrid
+* Seems to require more than 1 GPU
+    python tools/run_net.py --cfg configs/Charades/SLOWFAST_16x8_R50_multigrid.yaml DATA.PATH_TO_DATA_DIR /home/ubuntu/data/charades DATA.PATH_PREFIX /home/ubuntu/data/charades/Charades_v1_rgb NUM_GPUS 1 TRAIN.BATCH_SIZE 16 
 
 # Test
 python tools/run_net.py --cfg configs/Charades/SLOWFAST_16x8_R50_multigrid.yaml DATA.PATH_TO_DATA_DIR /home/ubuntu/data/charades DATA.PATH_PREFIX /home/ubuntu/data/charades NUM_GPUS 1 TEST.CHECKPOINT_FILE_PATH SLOWFAST_16x8_R50_multigrid.pkl TRAIN.ENABLE False
