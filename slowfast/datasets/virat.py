@@ -1,240 +1,416 @@
 #!/usr/bin/env python3
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 
-import os
-import random
-from itertools import chain as chain
+import logging
+import numpy as np
 import torch
-import torch.utils.data
-from fvcore.common.file_io import PathManager
 
-import slowfast.utils.logging as logging
-
+from . import virat_helper as virat_helper
+from . import cv2_transform as cv2_transform
+from . import transform as transform
 from . import utils as utils
 from .build import DATASET_REGISTRY
 
-logger = logging.get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 @DATASET_REGISTRY.register()
 class Virat(torch.utils.data.Dataset):
     """
-    Charades video loader. Construct the Charades video loader, then sample
-    clips from the videos. For training and validation, a single clip is randomly
-    sampled from every video with random cropping, scaling, and flipping. For
-    testing, multiple clips are uniformaly sampled from every video with uniform
-    cropping. For uniform cropping, we take the left, center, and right crop if
-    the width is larger than height, or take top, center, and bottom crop if the
-    height is larger than the width.
+    Virat Dataset
     """
 
-    def __init__(self, cfg, mode, num_retries=10):
-        """
-        Load Charades data (frame paths, labels, etc. ) to a given Dataset object.
-        The dataset could be downloaded from Chrades official website
-        (https://allenai.org/plato/charades/).
-        Please see datasets/DATASET.md for more information about the data format.
-        Args:
-            dataset (Dataset): a Dataset object to load Charades data to.
-            mode (string): 'train', 'val', or 'test'.
-        Args:
-            cfg (CfgNode): configs.
-            mode (string): Options includes `train`, `val`, or `test` mode.
-                For the train and val mode, the data loader will take data
-                from the train or val set, and sample one clip per video.
-                For the test mode, the data loader will take data from test set,
-                and sample multiple clips per video.
-            num_retries (int): number of retries.
-        """
-        # Only support train, val, and test mode.
-        assert mode in [
-            "train",
-            "val",
-            "test",
-        ], "Split '{}' not supported for Charades ".format(mode)
-        self.mode = mode
+    def __init__(self, cfg, split):
         self.cfg = cfg
+        self._split = split
+        self._sample_rate = cfg.DATA.SAMPLING_RATE
+        self._video_length = cfg.DATA.NUM_FRAMES
+        self._seq_len = self._video_length * self._sample_rate
+        self._num_classes = cfg.MODEL.NUM_CLASSES
+        # Augmentation params.
+        self._data_mean = cfg.DATA.MEAN
+        self._data_std = cfg.DATA.STD
+        self._use_bgr = cfg.VIRAT.BGR
+        self.random_horizontal_flip = cfg.DATA.RANDOM_FLIP
+        if self._split == "train":
+            self._crop_size = cfg.DATA.TRAIN_CROP_SIZE
+            self._jitter_min_scale = cfg.DATA.TRAIN_JITTER_SCALES[0]
+            self._jitter_max_scale = cfg.DATA.TRAIN_JITTER_SCALES[1]
+            self._use_color_augmentation = cfg.VIRAT.TRAIN_USE_COLOR_AUGMENTATION
+            self._pca_jitter_only = cfg.VIRAT.TRAIN_PCA_JITTER_ONLY
+            self._pca_eigval = cfg.VIRAT.TRAIN_PCA_EIGVAL
+            self._pca_eigvec = cfg.VIRAT.TRAIN_PCA_EIGVEC
+        else:
+            self._crop_size = cfg.DATA.TEST_CROP_SIZE
+            self._test_force_flip = cfg.VIRAT.TEST_FORCE_FLIP
 
-        self._video_meta = {}
-        self._num_retries = num_retries
-        # For training or validation mode, one single clip is sampled from every
-        # video. For testing, NUM_ENSEMBLE_VIEWS clips are sampled from every
-        # video. For every clip, NUM_SPATIAL_CROPS is cropped spatially from
-        # the frames.
-        if self.mode in ["train", "val"]:
-            self._num_clips = 1
-        elif self.mode in ["test"]:
-            self._num_clips = (
-                cfg.TEST.NUM_ENSEMBLE_VIEWS * cfg.TEST.NUM_SPATIAL_CROPS
-            )
+        self._load_data(cfg)
 
-        logger.info("Constructing Charades {}...".format(mode))
-        self._construct_loader()
-
-    def _construct_loader(self):
+    def _load_data(self, cfg):
         """
-        Construct the video loader.
-        """
-        logger.info("_construct_loader")
-        path_to_file = os.path.join(
-            self.cfg.DATA.PATH_TO_DATA_DIR,
-            "{}.csv".format("train" if self.mode == "train" else "val"),
-        )
-        assert PathManager.exists(path_to_file), "{} dir not found".format(
-            path_to_file
-        )
-        (self._path_to_videos, self._labels) = utils.load_image_lists(
-            path_to_file, self.cfg.DATA.PATH_PREFIX, return_list=True
-        )
-        # logger.info("_path_to_videos: {}".format(self._path_to_videos))
-        # logger.info("_labels: {}".format(self._labels))
-        logger.info("len(_labels): {}".format(len(self._labels[0])))
-        if self.mode != "train":
-            # Form video-level labels from frame level annotations.
-            self._labels = utils.convert_to_video_level_labels(self._labels)
+        Load frame paths and annotations from files
 
-        self._path_to_videos = list(
-            chain.from_iterable(
-                [[x] * self._num_clips for x in self._path_to_videos]
-            )
-        )
-        self._labels = list(
-            chain.from_iterable([[x] * self._num_clips for x in self._labels])
-        )
-        self._spatial_temporal_idx = list(
-            chain.from_iterable(
-                [range(self._num_clips) for _ in range(len(self._labels))]
-            )
-        )
-
-        logger.info(
-            "Charades dataloader constructed (size: {}) from {}".format(
-                len(self._path_to_videos), path_to_file
-            )
-        )
-
-    def __getitem__(self, index):
-        """
-        Given the video index, return the list of frames, label, and video
-        index if the video frames can be fetched.
         Args:
-            index (int): the video index provided by the pytorch sampler.
+            cfg (CfgNode): config
+        """
+        # Loading frame paths.
+        (
+            self._image_paths,
+            self._video_idx_to_name,
+        ) = virat_helper.load_image_lists(cfg, is_train=(self._split == "train"))
+
+        # Loading annotations for boxes and labels.
+        boxes_and_labels = virat_helper.load_boxes_and_labels(
+            cfg, mode=self._split
+        )
+
+        assert len(boxes_and_labels) == len(self._image_paths)
+
+        boxes_and_labels = [
+            boxes_and_labels[self._video_idx_to_name[i]]
+            for i in range(len(self._image_paths))
+        ]
+
+        # Get indices of keyframes and corresponding boxes and labels.
+        (
+            self._keyframe_indices,
+            self._keyframe_boxes_and_labels,
+        ) = virat_helper.get_keyframe_data(boxes_and_labels)
+
+        # Calculate the number of used boxes.
+        self._num_boxes_used = virat_helper.get_num_boxes_used(
+            self._keyframe_indices, self._keyframe_boxes_and_labels
+        )
+
+        self.print_summary()
+
+    def print_summary(self):
+        logger.info("=== Virat dataset summary ===")
+        logger.info("Split: {}".format(self._split))
+        logger.info("Number of videos: {}".format(len(self._image_paths)))
+        total_frames = sum(
+            len(video_img_paths) for video_img_paths in self._image_paths
+        )
+        logger.info("Number of frames: {}".format(total_frames))
+        logger.info("Number of key frames: {}".format(len(self)))
+        logger.info("Number of boxes: {}.".format(self._num_boxes_used))
+
+    def __len__(self):
+        return len(self._keyframe_indices)
+
+    def _images_and_boxes_preprocessing_cv2(self, imgs, boxes):
+        """
+        This function performs preprocessing for the input images and
+        corresponding boxes for one clip with opencv as backend.
+
+        Args:
+            imgs (tensor): the images.
+            boxes (ndarray): the boxes for the current clip.
+
+        Returns:
+            imgs (tensor): list of preprocessed images.
+            boxes (ndarray): preprocessed boxes.
+        """
+
+        height, width, _ = imgs[0].shape
+
+        boxes[:, [0, 2]] *= width
+        boxes[:, [1, 3]] *= height
+        boxes = cv2_transform.clip_boxes_to_image(boxes, height, width)
+
+        # `transform.py` is list of np.array. However, for Virat, we only have
+        # one np.array.
+        boxes = [boxes]
+
+        # The image now is in HWC, BGR format.
+        if self._split == "train":  # "train"
+            imgs, boxes = cv2_transform.random_short_side_scale_jitter_list(
+                imgs,
+                min_size=self._jitter_min_scale,
+                max_size=self._jitter_max_scale,
+                boxes=boxes,
+            )
+            imgs, boxes = cv2_transform.random_crop_list(
+                imgs, self._crop_size, order="HWC", boxes=boxes
+            )
+
+            if self.random_horizontal_flip:
+                # random flip
+                imgs, boxes = cv2_transform.horizontal_flip_list(
+                    0.5, imgs, order="HWC", boxes=boxes
+                )
+        elif self._split == "val":
+            # Short side to test_scale. Non-local and STRG uses 256.
+            imgs = [cv2_transform.scale(self._crop_size, img) for img in imgs]
+            boxes = [
+                cv2_transform.scale_boxes(
+                    self._crop_size, boxes[0], height, width
+                )
+            ]
+            imgs, boxes = cv2_transform.spatial_shift_crop_list(
+                self._crop_size, imgs, 1, boxes=boxes
+            )
+
+            if self._test_force_flip:
+                imgs, boxes = cv2_transform.horizontal_flip_list(
+                    1, imgs, order="HWC", boxes=boxes
+                )
+        elif self._split == "test":
+            # Short side to test_scale. Non-local and STRG uses 256.
+            imgs = [cv2_transform.scale(self._crop_size, img) for img in imgs]
+            boxes = [
+                cv2_transform.scale_boxes(
+                    self._crop_size, boxes[0], height, width
+                )
+            ]
+
+            if self._test_force_flip:
+                imgs, boxes = cv2_transform.horizontal_flip_list(
+                    1, imgs, order="HWC", boxes=boxes
+                )
+        else:
+            raise NotImplementedError(
+                "Unsupported split mode {}".format(self._split)
+            )
+
+        # Convert image to CHW keeping BGR order.
+        imgs = [cv2_transform.HWC2CHW(img) for img in imgs]
+
+        # Image [0, 255] -> [0, 1].
+        imgs = [img / 255.0 for img in imgs]
+
+        imgs = [
+            np.ascontiguousarray(
+                # img.reshape((3, self._crop_size, self._crop_size))
+                img.reshape((3, imgs[0].shape[1], imgs[0].shape[2]))
+            ).astype(np.float32)
+            for img in imgs
+        ]
+
+        # Do color augmentation (after divided by 255.0).
+        if self._split == "train" and self._use_color_augmentation:
+            if not self._pca_jitter_only:
+                imgs = cv2_transform.color_jitter_list(
+                    imgs,
+                    img_brightness=0.4,
+                    img_contrast=0.4,
+                    img_saturation=0.4,
+                )
+
+            imgs = cv2_transform.lighting_list(
+                imgs,
+                alphastd=0.1,
+                eigval=np.array(self._pca_eigval).astype(np.float32),
+                eigvec=np.array(self._pca_eigvec).astype(np.float32),
+            )
+
+        # Normalize images by mean and std.
+        imgs = [
+            cv2_transform.color_normalization(
+                img,
+                np.array(self._data_mean, dtype=np.float32),
+                np.array(self._data_std, dtype=np.float32),
+            )
+            for img in imgs
+        ]
+
+        # Concat list of images to single ndarray.
+        imgs = np.concatenate(
+            [np.expand_dims(img, axis=1) for img in imgs], axis=1
+        )
+
+        if not self._use_bgr:
+            # Convert image format from BGR to RGB.
+            imgs = imgs[::-1, ...]
+
+        imgs = np.ascontiguousarray(imgs)
+        imgs = torch.from_numpy(imgs)
+        boxes = cv2_transform.clip_boxes_to_image(
+            boxes[0], imgs[0].shape[1], imgs[0].shape[2]
+        )
+        return imgs, boxes
+
+    def _images_and_boxes_preprocessing(self, imgs, boxes):
+        """
+        This function performs preprocessing for the input images and
+        corresponding boxes for one clip.
+
+        Args:
+            imgs (tensor): the images.
+            boxes (ndarray): the boxes for the current clip.
+
+        Returns:
+            imgs (tensor): list of preprocessed images.
+            boxes (ndarray): preprocessed boxes.
+        """
+        # Image [0, 255] -> [0, 1].
+        imgs = imgs.float()
+        imgs = imgs / 255.0
+
+        height, width = imgs.shape[2], imgs.shape[3]
+        # The format of boxes is [x1, y1, x2, y2]. The input boxes are in the
+        # range of [0, 1].
+        boxes[:, [0, 2]] *= width
+        boxes[:, [1, 3]] *= height
+        boxes = transform.clip_boxes_to_image(boxes, height, width)
+
+        if self._split == "train":
+            # Train split
+            imgs, boxes = transform.random_short_side_scale_jitter(
+                imgs,
+                min_size=self._jitter_min_scale,
+                max_size=self._jitter_max_scale,
+                boxes=boxes,
+            )
+            imgs, boxes = transform.random_crop(
+                imgs, self._crop_size, boxes=boxes
+            )
+
+            # Random flip.
+            imgs, boxes = transform.horizontal_flip(0.5, imgs, boxes=boxes)
+        elif self._split == "val":
+            # Val split
+            # Resize short side to crop_size. Non-local and STRG uses 256.
+            imgs, boxes = transform.random_short_side_scale_jitter(
+                imgs,
+                min_size=self._crop_size,
+                max_size=self._crop_size,
+                boxes=boxes,
+            )
+
+            # Apply center crop for val split
+            imgs, boxes = transform.uniform_crop(
+                imgs, size=self._crop_size, spatial_idx=1, boxes=boxes
+            )
+
+            if self._test_force_flip:
+                imgs, boxes = transform.horizontal_flip(1, imgs, boxes=boxes)
+        elif self._split == "test":
+            # Test split
+            # Resize short side to crop_size. Non-local and STRG uses 256.
+            imgs, boxes = transform.random_short_side_scale_jitter(
+                imgs,
+                min_size=self._crop_size,
+                max_size=self._crop_size,
+                boxes=boxes,
+            )
+
+            if self._test_force_flip:
+                imgs, boxes = transform.horizontal_flip(1, imgs, boxes=boxes)
+        else:
+            raise NotImplementedError(
+                "{} split not supported yet!".format(self._split)
+            )
+
+        # Do color augmentation (after divided by 255.0).
+        if self._split == "train" and self._use_color_augmentation:
+            if not self._pca_jitter_only:
+                imgs = transform.color_jitter(
+                    imgs,
+                    img_brightness=0.4,
+                    img_contrast=0.4,
+                    img_saturation=0.4,
+                )
+
+            imgs = transform.lighting_jitter(
+                imgs,
+                alphastd=0.1,
+                eigval=np.array(self._pca_eigval).astype(np.float32),
+                eigvec=np.array(self._pca_eigvec).astype(np.float32),
+            )
+
+        # Normalize images by mean and std.
+        imgs = transform.color_normalization(
+            imgs,
+            np.array(self._data_mean, dtype=np.float32),
+            np.array(self._data_std, dtype=np.float32),
+        )
+
+        if not self._use_bgr:
+            # Convert image format from BGR to RGB.
+            # Note that Kinetics pre-training uses RGB!
+            imgs = imgs[:, [2, 1, 0], ...]
+
+        boxes = transform.clip_boxes_to_image(
+            boxes, self._crop_size, self._crop_size
+        )
+
+        return imgs, boxes
+
+    def __getitem__(self, idx):
+        """
+        Generate corresponding clips, boxes, labels and metadata for given idx.
+
+        Args:
+            idx (int): the video index provided by the pytorch sampler.
         Returns:
             frames (tensor): the frames of sampled from the video. The dimension
                 is `channel` x `num frames` x `height` x `width`.
-            label (int): the label of the current video.
-            index (int): the index of the video.
+            label (ndarray): the label for correspond boxes for the current video.
+            idx (int): the video index provided by the pytorch sampler.
+            extra_data (dict): a dict containing extra data fields, like "boxes",
+                "ori_boxes" and "metadata".
         """
-        short_cycle_idx = None
-        # When short cycle is used, input index is a tupple.
-        if isinstance(index, tuple):
-            index, short_cycle_idx = index
+        video_idx, sec_idx, sec, center_idx = self._keyframe_indices[idx]
+        # Get the frame idxs for current clip.
+        seq = utils.get_sequence(
+            center_idx,
+            self._seq_len // 2,
+            self._sample_rate,
+            num_frames=len(self._image_paths[video_idx]),
+        )
 
-        if self.mode in ["train", "val"]:
-            # -1 indicates random sampling.
-            temporal_sample_index = -1
-            spatial_sample_index = -1
-            min_scale = self.cfg.DATA.TRAIN_JITTER_SCALES[0]
-            max_scale = self.cfg.DATA.TRAIN_JITTER_SCALES[1]
-            crop_size = self.cfg.DATA.TRAIN_CROP_SIZE
-            if short_cycle_idx in [0, 1]:
-                crop_size = int(
-                    round(
-                        self.cfg.MULTIGRID.SHORT_CYCLE_FACTORS[short_cycle_idx]
-                        * self.cfg.MULTIGRID.DEFAULT_S
-                    )
-                )
-            if self.cfg.MULTIGRID.DEFAULT_S > 0:
-                # Decreasing the scale is equivalent to using a larger "span"
-                # in a sampling grid.
-                min_scale = int(
-                    round(
-                        float(min_scale)
-                        * crop_size
-                        / self.cfg.MULTIGRID.DEFAULT_S
-                    )
-                )
-        elif self.mode in ["test"]:
-            temporal_sample_index = (
-                self._spatial_temporal_idx[index]
-                // self.cfg.TEST.NUM_SPATIAL_CROPS
+        clip_label_list = self._keyframe_boxes_and_labels[video_idx][sec_idx]
+        assert len(clip_label_list) > 0
+
+        # Get boxes and labels for current clip.
+        boxes = []
+        labels = []
+        for box_labels in clip_label_list:
+            boxes.append(box_labels[0])
+            labels.append(box_labels[1])
+        boxes = np.array(boxes)
+        # Score is not used.
+        boxes = boxes[:, :4].copy()
+        ori_boxes = boxes.copy()
+
+        # Load images of current clip.
+        image_paths = [self._image_paths[video_idx][frame] for frame in seq]
+        imgs = utils.retry_load_images(
+            image_paths, backend=self.cfg.VIRAT.IMG_PROC_BACKEND
+        )
+        if self.cfg.VIRAT.IMG_PROC_BACKEND == "pytorch":
+            # T H W C -> T C H W.
+            imgs = imgs.permute(0, 3, 1, 2)
+            # Preprocess images and boxes.
+            imgs, boxes = self._images_and_boxes_preprocessing(
+                imgs, boxes=boxes
             )
-            # spatial_sample_index is in [0, 1, 2]. Corresponding to left,
-            # center, or right if width is larger than height, and top, middle,
-            # or bottom if height is larger than width.
-            spatial_sample_index = (
-                self._spatial_temporal_idx[index]
-                % self.cfg.TEST.NUM_SPATIAL_CROPS
-            )
-            min_scale, max_scale, crop_size = [self.cfg.DATA.TEST_CROP_SIZE] * 3
-            # The testing is deterministic and no jitter should be performed.
-            # min_scale, max_scale, and crop_size are expect to be the same.
-            assert len({min_scale, max_scale, crop_size}) == 1
+            # T C H W -> C T H W.
+            imgs = imgs.permute(1, 0, 2, 3)
         else:
-            raise NotImplementedError(
-                "Does not support {} mode".format(self.mode)
+            # Preprocess images and boxes
+            imgs, boxes = self._images_and_boxes_preprocessing_cv2(
+                imgs, boxes=boxes
             )
 
-        num_frames = self.cfg.DATA.NUM_FRAMES
-        sampling_rate = utils.get_random_sampling_rate(
-            self.cfg.MULTIGRID.LONG_CYCLE_SAMPLING_RATE,
-            self.cfg.DATA.SAMPLING_RATE,
-        )
-        video_length = len(self._path_to_videos[index])
-        assert video_length == len(self._labels[index])
+        # Construct label arrays.
+        label_arrs = np.zeros((len(labels), self._num_classes), dtype=np.int32)
+        for i, box_labels in enumerate(labels):
+            # Virat label index starts from 1.
+            for label in box_labels:
+                if label == -1:
+                    continue
+                assert label >= 1 and label <= 80
+                label_arrs[i][label - 1] = 1
 
-        clip_length = (num_frames - 1) * sampling_rate + 1
-        if temporal_sample_index == -1:
-            if clip_length > video_length:
-                start = random.randint(video_length - clip_length, 0)
-            else:
-                start = random.randint(0, video_length - clip_length)
-        else:
-            gap = float(max(video_length - clip_length, 0)) / (
-                self.cfg.TEST.NUM_ENSEMBLE_VIEWS - 1
-            )
-            start = int(round(gap * temporal_sample_index))
+        imgs = utils.pack_pathway_output(self.cfg, imgs)
+        metadata = [[video_idx, sec]] * len(boxes)
 
-        seq = [
-            max(min(start + i * sampling_rate, video_length - 1), 0)
-            for i in range(num_frames)
-        ]
-        frames = torch.as_tensor(
-            utils.retry_load_images(
-                [self._path_to_videos[index][frame] for frame in seq],
-                self._num_retries,
-            )
-        )
+        extra_data = {
+            "boxes": boxes,
+            "ori_boxes": ori_boxes,
+            "metadata": metadata,
+        }
 
-        label = utils.aggregate_labels(
-            [self._labels[index][i] for i in range(seq[0], seq[-1] + 1)]
-        )
-        label = torch.as_tensor(
-            utils.as_binary_vector(label, self.cfg.MODEL.NUM_CLASSES)
-        )
-
-        # Perform color normalization.
-        frames = utils.tensor_normalize(
-            frames, self.cfg.DATA.MEAN, self.cfg.DATA.STD
-        )
-        # T H W C -> C T H W.
-        frames = frames.permute(3, 0, 1, 2)
-        # Perform data augmentation.
-        frames = utils.spatial_sampling(
-            frames,
-            spatial_idx=spatial_sample_index,
-            min_scale=min_scale,
-            max_scale=max_scale,
-            crop_size=crop_size,
-            random_horizontal_flip=self.cfg.DATA.RANDOM_FLIP,
-            inverse_uniform_sampling=self.cfg.DATA.INV_UNIFORM_SAMPLE,
-        )
-        frames = utils.pack_pathway_output(self.cfg, frames)
-        return frames, label, index, {}
-
-    def __len__(self):
-        """
-        Returns:
-            (int): the number of videos in the dataset.
-        """
-        return len(self._path_to_videos)
+        return imgs, label_arrs, idx, extra_data
