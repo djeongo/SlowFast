@@ -38,19 +38,33 @@ https://actev.nist.gov/
     * Download: https://viratdata.org/#getting-data
         * VIRAT Video Dataset consists of ground video dataset (~40G)
     * Annotations: https://gitlab.kitware.com/viratdata/viratannotations
+        * Format
+            Event File Columns 
+            1: event ID        (unique identifier per event within a clip, same eid can exist on different clips)
+            2: event type      (event type)
+            3: duration        (event duration in frames)
+            4: start frame     (start frame of the event)
+            5: end frame       (end frame of the event)
+            6: current frame   (current frame number)
+            7: bbox lefttop x  (horizontal x coordinate of left top of bbox, origin is lefttop of the frame)
+            8: bbox lefttop y  (vertical y coordinate of left top of bbox, origin is lefttop of the frame)
+            9: bbox width      (horizontal width of the bbox)
+            10: bbox height    (vertical height of the bbox)
+        event ID    event type  duration    start_frame end_frame   current_frame   bbox
+        0           1           59          3676        3734        3676            710 454 224 228 
     * Classes
-        * Person loading an Object to a Vehicle
-        * Person Unloading an Object from a Vehicle
-        * Person Opening a Vehicle Trunk 
-        * Person Closing a Vehicle Trunk
-        * Person getting into a Vehicle
-        * Person getting out of a Vehicle
-        * Person gesturing
-        * Person digging (Note: not existing in Release 2.0)
-        * Person Carrying an Object
-        * Person running
-        * Person entering a facility
-        * Person exiting a facility
+        * 1 Person loading an Object to a Vehicle
+        * 2 Person Unloading an Object from a Vehicle
+        * 3 Person Opening a Vehicle Trunk 
+        * 4 Person Closing a Vehicle Trunk
+        * 5 Person getting into a Vehicle
+        * 6 Person getting out of a Vehicle
+        * 7 Person gesturing
+        * 8 Person digging (Note: not existing in Release 2.0)
+        * 9 Person Carrying an Object
+        * 10 Person running
+        * 11 Person entering a facility
+        * 12 Person exiting a facility
     * Documentation:
         VIRAT_Video_Dataset_Release2.0_Introduction_v1.0.pdf
 * Data access from mevadata.org: Accessing and using MEVA and MEVA Download Instructions
@@ -90,10 +104,24 @@ $ pip install -e detectron2_repo
 in slowfast
 $ python setup.py build develop
 
+## VIRAT
 # Train
-## Non-multigrid
-    python tools/run_net.py --cfg configs/Charades/SLOWFAST_16x8_R50.yaml DATA.PATH_TO_DATA_DIR /home/ubuntu/data/charades DATA.PATH_PREFIX /home/ubuntu/data/charades/Charades_v1_rgb NUM_GPUS 1 TRAIN.BATCH_SIZE 4
-## Multigrid
+```
+python tools/run_net.py --cfg configs/VIRAT/SLOWFAST_16x8_R50.yaml DATA.PATH_TO_DATA_DIR ~/sdc1/data/VIRAT DATA.PATH_PREFIX / NUM_GPUS 1 TRAIN.BATCH_SIZE 1 TEST.ENABLE False
+```
+# Test
+```
+python tools/run_net.py --cfg configs/VIRAT/SLOWFAST_16x8_R50.yaml DATA.PATH_TO_DATA_DIR ~/sdc1/data/VIRAT DATA.PATH_PREFIX / NUM_GPUS 1 TRAIN.ENABLE False TEST.ENABLE True
+```
+
+# Train
+
+## Charades
+### Non-multigrid
+```
+python tools/run_net.py --cfg configs/Charades/SLOWFAST_16x8_R50.yaml DATA.PATH_TO_DATA_DIR /home/ubuntu/data/charades DATA.PATH_PREFIX /home/ubuntu/data/charades/Charades_v1_rgb NUM_GPUS 1 TRAIN.BATCH_SIZE 4
+```
+### Multigrid
 * Seems to require more than 1 GPU
     python tools/run_net.py --cfg configs/Charades/SLOWFAST_16x8_R50_multigrid.yaml DATA.PATH_TO_DATA_DIR /home/ubuntu/data/charades DATA.PATH_PREFIX /home/ubuntu/data/charades/Charades_v1_rgb NUM_GPUS 1 TRAIN.BATCH_SIZE 16 
 

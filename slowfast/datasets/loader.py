@@ -84,6 +84,7 @@ def construct_loader(cfg, split, is_precise_bn=False):
 
     if cfg.MULTIGRID.SHORT_CYCLE and split in ["train"] and not is_precise_bn:
         # Create a sampler for multi-process training
+        print("Creating sampler")
         sampler = utils.create_sampler(dataset, shuffle, cfg)
         batch_sampler = ShortCycleBatchSampler(
             sampler, batch_size=batch_size, drop_last=drop_last, cfg=cfg
@@ -104,7 +105,7 @@ def construct_loader(cfg, split, is_precise_bn=False):
             dataset,
             batch_size=batch_size,
             shuffle=(False if sampler else shuffle),
-            sampler=sampler,
+            sampler=sampler, # None if GPU == 1
             num_workers=cfg.DATA_LOADER.NUM_WORKERS,
             pin_memory=cfg.DATA_LOADER.PIN_MEMORY,
             drop_last=drop_last,
