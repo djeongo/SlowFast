@@ -1,6 +1,6 @@
 # IN_DATA_DIR="/home/pius/Downloads/VIRAT/videos_original"
-IN_DATA_DIR="/home/pius/Downloads/VIRAT/tmp"
-OUT_DATA_DIR="/home/pius/sdc1/data/VIRAT/"
+IN_DATA_DIR="/data/actev-data-repo/corpora/VIRAT-V2"
+OUT_DATA_DIR="/data/virat-v2"
 
 if [[ ! -d "${OUT_DATA_DIR}" ]]; then
   echo "${OUT_DATA_DIR} doesn't exist. Creating it.";
