@@ -4,6 +4,7 @@
 """Data loader."""
 
 import itertools
+import slowfast.utils.logging as logging
 import numpy as np
 import torch
 from torch.utils.data._utils.collate import default_collate
@@ -15,6 +16,7 @@ from slowfast.datasets.multigrid_helper import ShortCycleBatchSampler
 from . import utils as utils
 from .build import build_dataset
 
+logger = logging.get_logger(__name__)
 
 def detection_collate(batch):
     """
@@ -81,7 +83,7 @@ def construct_loader(cfg, split, is_precise_bn=False):
 
     # Construct the dataset
     dataset = build_dataset(dataset_name, cfg, split)
-
+    logger.info("dataset: len:{}".format(len(dataset)))
     if cfg.MULTIGRID.SHORT_CYCLE and split in ["train"] and not is_precise_bn:
         # Create a sampler for multi-process training
         print("Creating sampler")
@@ -100,6 +102,8 @@ def construct_loader(cfg, split, is_precise_bn=False):
     else:
         # Create a sampler for multi-process training
         sampler = utils.create_sampler(dataset, shuffle, cfg)
+        logger.info("sampler: {}".format(sampler))
+        logger.info("batch_size: {}".format(batch_size))
         # Create a loader
         loader = torch.utils.data.DataLoader(
             dataset,

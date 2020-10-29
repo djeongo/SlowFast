@@ -67,7 +67,7 @@ class AVAMeter(object):
         self.all_metadata = []
         self.overall_iters = overall_iters
         self.excluded_keys = read_exclusions(
-            os.path.join(cfg.AVA.ANNOTATION_DIR, cfg.AVA.EXCLUSION_FILE)
+            None #os.path.join(cfg.AVA.ANNOTATION_DIR, cfg.AVA.EXCLUSION_FILE)
         )
         self.categories, self.class_whitelist = read_labelmap(
             os.path.join(cfg.AVA.ANNOTATION_DIR, cfg.AVA.LABEL_MAP_FILE)

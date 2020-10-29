@@ -46,8 +46,10 @@ def train_epoch(
     model.train()
     train_meter.iter_tic()
     data_size = len(train_loader)
-
+    logger.info("type(train_loader): {}, len:{}".format(type(train_loader), len(train_loader)))
     for cur_iter, (inputs, labels, _, meta) in enumerate(train_loader):
+        logger.info("cur_iter: {}".format(cur_iter))
+        logger.info("labels_shape: {}".format(labels.shape))
         # Transfer the data to the current GPU device.
         if cfg.NUM_GPUS:
             if isinstance(inputs, (list,)):
@@ -391,6 +393,7 @@ def train(cfg):
 
     # Create the video train and val loaders.
     train_loader = loader.construct_loader(cfg, "train")
+    logger.info("Constructed train_loader, len:{}".format(len(train_loader)))
     val_loader = loader.construct_loader(cfg, "val")
     precise_bn_loader = (
         loader.construct_loader(cfg, "train", is_precise_bn=True)
@@ -418,6 +421,7 @@ def train(cfg):
     logger.info("Start epoch: {}".format(start_epoch + 1))
 
     for cur_epoch in range(start_epoch, cfg.SOLVER.MAX_EPOCH):
+        logger.info("cfg.MULTIGRID.LONG_CYCLE: {}".format(cfg.MULTIGRID.LONG_CYCLE))
         if cfg.MULTIGRID.LONG_CYCLE:
             cfg, changed = multigrid.update_long_cycle(cfg, cur_epoch)
             if changed:

@@ -95,6 +95,7 @@ vehicle_makes_u_turn
 
 
 # Install 
+$ source activate pytorch_latest_p36
 $ pip install av
 $ pip install simplejson
 

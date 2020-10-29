@@ -64,8 +64,10 @@ class Ava(torch.utils.data.Dataset):
             cfg, mode=self._split
         )
 
+        # Verify number of videos match
         assert len(boxes_and_labels) == len(self._image_paths)
 
+        # Convert to list
         boxes_and_labels = [
             boxes_and_labels[self._video_idx_to_name[i]]
             for i in range(len(self._image_paths))
@@ -351,6 +353,11 @@ class Ava(torch.utils.data.Dataset):
             extra_data (dict): a dict containing extra data fields, like "boxes",
                 "ori_boxes" and "metadata".
         """
+        # idx - index into unique number of frames across the videos
+
+        # sec_idx = index of second in the video
+        # sec = actual sec, 902,etc
+        # center_idx = frame number
         video_idx, sec_idx, sec, center_idx = self._keyframe_indices[idx]
         # Get the frame idxs for current clip.
         seq = utils.get_sequence(

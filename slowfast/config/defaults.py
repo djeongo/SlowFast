@@ -451,6 +451,43 @@ _C.DETECTION.SPATIAL_SCALE_FACTOR = 16
 _C.DETECTION.ROI_XFORM_RESOLUTION = 7
 
 
+# VIRAT Dataset options
+_C.VIRAT = CfgNode()
+
+# Where train.csv lives
+_C.VIRAT.FRAME_LIST_DIR = '/data/virat-v2/frame_lists'
+
+# Directory path of frames.
+_C.VIRAT.FRAME_DIR = "/"
+
+# 
+_C.VIRAT.TRAIN_GT_BOX_LISTS = ["train_annotations.csv"]
+
+_C.VIRAT.BGR = False
+_C.VIRAT.TRAIN_USE_COLOR_AUGMENTATION = False
+_C.VIRAT.TRAIN_PCA_JITTER_ONLY = False
+# Eigenvalues for PCA jittering. Note PCA is RGB based.
+_C.VIRAT.TRAIN_PCA_EIGVAL = [0.225, 0.224, 0.229]
+
+# Eigenvectors for PCA jittering.
+_C.VIRAT.TRAIN_PCA_EIGVEC = [
+    [-0.5675, 0.7192, 0.4009],
+    [-0.5808, -0.0045, -0.8140],
+    [-0.5836, -0.6948, 0.4203],
+]
+# Filenames of training samples list files.
+# File containing the header "original_vido_id video_id frame_id path labels"
+_C.VIRAT.TRAIN_LISTS = ["train.csv"]
+_C.VIRAT.TRAIN_PREDICT_BOX_LISTS = []
+_C.VIRAT.ANNOTATION_DIR = ("/data/virat-v2/annotations/")
+_C.VIRAT.DETECTION_SCORE_THRESH = 0.9
+_C.VIRAT.IMG_PROC_BACKEND = 'cv2'
+_C.VIRAT.TEST_FORCE_FLIP = False
+_C.VIRAT.TEST_LISTS = ["dev.csv"] # TODO
+_C.VIRAT.TEST_PREDICT_BOX_LISTS = ['dev_annotations.csv'] # TODO
+_C.VIRAT.FULL_TEST_ON_VAL = False # TODO
+_C.VIRAT.EXCLUSION_FILE = None
+
 # -----------------------------------------------------------------------------
 # AVA Dataset options
 # -----------------------------------------------------------------------------
@@ -478,7 +515,7 @@ _C.AVA.TEST_LISTS = ["val.csv"]
 # Filenames of box list files for training. Note that we assume files which
 # contains predicted boxes will have a suffix "predicted_boxes" in the
 # filename.
-_C.AVA.TRAIN_GT_BOX_LISTS = ["ava_train_v2.2.csv"]
+_C.AVA.TRAIN_GT_BOX_LISTS = ["ava_train_v2.1.csv"]
 _C.AVA.TRAIN_PREDICT_BOX_LISTS = []
 
 # Filenames of box list files for test.
@@ -518,7 +555,7 @@ _C.AVA.FULL_TEST_ON_VAL = False
 _C.AVA.LABEL_MAP_FILE = "ava_action_list_v2.2_for_activitynet_2019.pbtxt"
 
 # The name of the file to the ava exclusion.
-_C.AVA.EXCLUSION_FILE = "ava_val_excluded_timestamps_v2.2.csv"
+_C.AVA.EXCLUSION_FILE = None #"ava_val_excluded_timestamps_v2.2.csv"
 
 # The name of the file to the ava groundtruth.
 _C.AVA.GROUNDTRUTH_FILE = "ava_val_v2.2.csv"

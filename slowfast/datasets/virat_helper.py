@@ -9,7 +9,7 @@ from fvcore.common.file_io import PathManager
 logger = logging.getLogger(__name__)
 
 FPS = 30
-VIRAT_VALID_FRAMES = range(902, 1799)
+# VIRAT_VALID_FRAMES = range(902, 1799)
 
 
 def load_image_lists(cfg, is_train):
@@ -89,6 +89,7 @@ def load_boxes_and_labels(cfg, mode):
         os.path.join(cfg.VIRAT.ANNOTATION_DIR, filename)
         for filename in gt_lists + pred_lists
     ]
+    logger.debug("ann_filenames: {}".format(ann_filenames))
     ann_is_gt_box = [True] * len(gt_lists) + [False] * len(pred_lists)
 
     detect_thresh = cfg.VIRAT.DETECTION_SCORE_THRESH
@@ -130,10 +131,8 @@ def get_keyframe_data(boxes_and_labels):
     def sec_to_frame(sec):
         """
         Convert time index (in second) to frame index.
-        0: 900
-        30: 901
         """
-        return (sec - 900) * FPS
+        return sec * FPS
 
     keyframe_indices = []
     keyframe_boxes_and_labels = []
@@ -142,8 +141,8 @@ def get_keyframe_data(boxes_and_labels):
         sec_idx = 0
         keyframe_boxes_and_labels.append([])
         for sec in boxes_and_labels[video_idx].keys():
-            if sec not in VIRAT_VALID_FRAMES:
-                continue
+            # if sec not in VIRAT_VALID_FRAMES:
+                # continue
 
             if len(boxes_and_labels[video_idx][sec]) > 0:
                 keyframe_indices.append(
@@ -205,6 +204,7 @@ def parse_bboxes_file(
                         continue
 
                 video_name, frame_sec = row[0], int(row[1])
+
                 if frame_sec % boxes_sample_rate != 0:
                     continue
 
@@ -215,8 +215,11 @@ def parse_bboxes_file(
 
                 if video_name not in all_boxes:
                     all_boxes[video_name] = {}
-                    for sec in VIRAT_VALID_FRAMES:
-                        all_boxes[video_name][sec] = {}
+                    # for sec in VIRAT_VALID_FRAMES:
+                        # all_boxes[video_name][sec] = {}
+                
+                if frame_sec not in all_boxes[video_name]:
+                    all_boxes[video_name][frame_sec] = {}
 
                 if box_key not in all_boxes[video_name][frame_sec]:
                     all_boxes[video_name][frame_sec][box_key] = [box, []]

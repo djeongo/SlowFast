@@ -2,12 +2,11 @@
 
 # VIRAT-V2
 # IN_DATA_DIR="/data/actev-data-repo/corpora/VIRAT-V2"
-IN_DATA_DIR="/data/virat-v2/videos_original"
-OUT_DATA_DIR="/data/virat-v2/frames"
+# OUT_DATA_DIR="/data/virat-v2"
 
 # VIRAT-V1
-# IN_DATA_DIR="/data/actev-data-repo/corpora/VIRAT-V1"
-# OUT_DATA_DIR="/data/virat-v1/frames"
+IN_DATA_DIR="/data/actev-data-repo/corpora/VIRAT-V1/combined"
+OUT_DATA_DIR="/data/virat-v1/frames"
 
 if [[ ! -d "${OUT_DATA_DIR}" ]]; then
   echo "${OUT_DATA_DIR} doesn't exist. Creating it.";
@@ -33,6 +32,5 @@ do
   out_name="${out_video_dir}/${video_name}_%06d.jpg"
 
   # ffmpeg -i "${video}" -r 30 -q:v 1 "${out_name}"
-  # ffmpeg -i "${video}" -r 30 -q:v 1 "${out_name}"
-  ffmpeg -i "${video}" -r 30 -q:v 1 -filter:v scale=640:-1 "${out_name}"
+  ffmpeg -i "${video}" -r 30 -q:v 1 "${out_name}"
 done

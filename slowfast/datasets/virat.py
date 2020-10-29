@@ -30,7 +30,7 @@ class Virat(torch.utils.data.Dataset):
         # Augmentation params.
         self._data_mean = cfg.DATA.MEAN
         self._data_std = cfg.DATA.STD
-        self._use_bgr = cfg.VIRAT.BGR
+        # self._use_bgr = cfg.VIRAT.BGR
         self.random_horizontal_flip = cfg.DATA.RANDOM_FLIP
         if self._split == "train":
             self._crop_size = cfg.DATA.TRAIN_CROP_SIZE
@@ -64,6 +64,8 @@ class Virat(torch.utils.data.Dataset):
             cfg, mode=self._split
         )
 
+        logger.debug('len(boxes_and_labels): {}'.format(len(boxes_and_labels)))
+        logger.debug('len(self._image_paths): {}'.format(len(self._image_paths)))
         assert len(boxes_and_labels) == len(self._image_paths)
 
         boxes_and_labels = [
@@ -111,7 +113,7 @@ class Virat(torch.utils.data.Dataset):
             imgs (tensor): list of preprocessed images.
             boxes (ndarray): preprocessed boxes.
         """
-
+        logger.debug("_images_and_boxes_preprocessing_cv2: imgs[0].shape: {}".format(imgs[0].shape))
         height, width, _ = imgs[0].shape
 
         boxes[:, [0, 2]] *= width
@@ -139,6 +141,8 @@ class Virat(torch.utils.data.Dataset):
                 imgs, boxes = cv2_transform.horizontal_flip_list(
                     0.5, imgs, order="HWC", boxes=boxes
                 )
+            
+            logger.debug("after random_horizontal_flip: {}, len(iimgs):{}".format(imgs[0].shape, len(imgs)))
         elif self._split == "val":
             # Short side to test_scale. Non-local and STRG uses 256.
             imgs = [cv2_transform.scale(self._crop_size, img) for img in imgs]
@@ -175,7 +179,7 @@ class Virat(torch.utils.data.Dataset):
 
         # Convert image to CHW keeping BGR order.
         imgs = [cv2_transform.HWC2CHW(img) for img in imgs]
-
+        
         # Image [0, 255] -> [0, 1].
         imgs = [img / 255.0 for img in imgs]
 
@@ -186,7 +190,7 @@ class Virat(torch.utils.data.Dataset):
             ).astype(np.float32)
             for img in imgs
         ]
-
+        logger.debug("After convert image to CHW keeping BGR order: {}, len(imgs): {}".format(imgs[0].shape, len(imgs)))
         # Do color augmentation (after divided by 255.0).
         if self._split == "train" and self._use_color_augmentation:
             if not self._pca_jitter_only:
@@ -214,20 +218,25 @@ class Virat(torch.utils.data.Dataset):
             for img in imgs
         ]
 
+        logger.debug("After Normalize images by mean and std.: {}, len(imgs): {}".format(imgs[0].shape, len(imgs)))
+
         # Concat list of images to single ndarray.
         imgs = np.concatenate(
             [np.expand_dims(img, axis=1) for img in imgs], axis=1
         )
 
-        if not self._use_bgr:
-            # Convert image format from BGR to RGB.
-            imgs = imgs[::-1, ...]
+        logger.debug("After Concat list of images to single ndarray.: {}, len(imgs): {}".format(imgs[0].shape, len(imgs)))
+
+        # if not self._use_bgr:
+        #     # Convert image format from BGR to RGB.
+        #     imgs = imgs[::-1, ...]
 
         imgs = np.ascontiguousarray(imgs)
         imgs = torch.from_numpy(imgs)
         boxes = cv2_transform.clip_boxes_to_image(
             boxes[0], imgs[0].shape[1], imgs[0].shape[2]
         )
+        logger.debug("Returning: {}, len(imgs): {}".format(imgs[0].shape, len(imgs)))
         return imgs, boxes
 
     def _images_and_boxes_preprocessing(self, imgs, boxes):
@@ -352,6 +361,9 @@ class Virat(torch.utils.data.Dataset):
                 "ori_boxes" and "metadata".
         """
         video_idx, sec_idx, sec, center_idx = self._keyframe_indices[idx]
+        logger.debug("video_idx: {}".format(video_idx))
+        logger.debug("sec_idx: {}".format(sec_idx))
+        logger.debug("center_idx: {}".format(center_idx))
         # Get the frame idxs for current clip.
         seq = utils.get_sequence(
             center_idx,
@@ -359,6 +371,7 @@ class Virat(torch.utils.data.Dataset):
             self._sample_rate,
             num_frames=len(self._image_paths[video_idx]),
         )
+        logger.debug('seq: {}'.format(seq))
 
         clip_label_list = self._keyframe_boxes_and_labels[video_idx][sec_idx]
         assert len(clip_label_list) > 0
@@ -379,6 +392,7 @@ class Virat(torch.utils.data.Dataset):
         imgs = utils.retry_load_images(
             image_paths, backend=self.cfg.VIRAT.IMG_PROC_BACKEND
         )
+        
         if self.cfg.VIRAT.IMG_PROC_BACKEND == "pytorch":
             # T H W C -> T C H W.
             imgs = imgs.permute(0, 3, 1, 2)
@@ -393,24 +407,27 @@ class Virat(torch.utils.data.Dataset):
             imgs, boxes = self._images_and_boxes_preprocessing_cv2(
                 imgs, boxes=boxes
             )
+            logger.debug('imgs.shape: {}'.format(imgs.shape))
 
         # Construct label arrays.
         label_arrs = np.zeros((len(labels), self._num_classes), dtype=np.int32)
         for i, box_labels in enumerate(labels):
             # Virat label index starts from 1.
             for label in box_labels:
-                if label == -1:
-                    continue
-                assert label >= 1 and label <= 80
-                label_arrs[i][label - 1] = 1
-
+                # print(label)
+                # if label == -1:
+                #     continue
+                # assert label >= 1 and label <= 80
+                label_arrs[i][label] = 1
+        logger.debug("Before utils.pack_pathway_output: {}".format(imgs.shape))
         imgs = utils.pack_pathway_output(self.cfg, imgs)
         metadata = [[video_idx, sec]] * len(boxes)
+        logger.debug("After utils.pack_pathway_output: {}, len(imgs): {}".format(len(imgs), imgs[0].shape))
 
         extra_data = {
             "boxes": boxes,
             "ori_boxes": ori_boxes,
-            "metadata": metadata,
+            "metadata": metadata, # Need to enable DETECTION
         }
 
         return imgs, label_arrs, idx, extra_data
