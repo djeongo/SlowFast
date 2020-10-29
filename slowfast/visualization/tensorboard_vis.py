@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 
+from datetime import datetime
 import logging as log
 import math
 import os
@@ -43,9 +44,10 @@ class TensorboardWriter(object):
         self.cm_figsize = cfg.TENSORBOARD.CONFUSION_MATRIX.FIGSIZE
         self.hist_figsize = cfg.TENSORBOARD.HISTOGRAM.FIGSIZE
 
+        now = datetime.now()
         if cfg.TENSORBOARD.LOG_DIR == "":
             log_dir = os.path.join(
-                cfg.OUTPUT_DIR, "runs-{}".format(cfg.TRAIN.DATASET)
+                cfg.OUTPUT_DIR, "runs-{}/{}".format(cfg.TRAIN.DATASET, now.isoformat())
             )
         else:
             log_dir = os.path.join(cfg.OUTPUT_DIR, cfg.TENSORBOARD.LOG_DIR)
