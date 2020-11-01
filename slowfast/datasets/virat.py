@@ -126,12 +126,12 @@ class Virat(torch.utils.data.Dataset):
 
         # The image now is in HWC, BGR format.
         if self._split == "train":  # "train"
-            imgs, boxes = cv2_transform.random_short_side_scale_jitter_list(
-                imgs,
-                min_size=self._jitter_min_scale,
-                max_size=self._jitter_max_scale,
-                boxes=boxes,
-            )
+            # imgs, boxes = cv2_transform.random_short_side_scale_jitter_list(
+            #     imgs,
+            #     min_size=self._jitter_min_scale,
+            #     max_size=self._jitter_max_scale,
+            #     boxes=boxes,
+            # )
             imgs, boxes = cv2_transform.random_crop_list(
                 imgs, self._crop_size, order="HWC", boxes=boxes
             )
@@ -141,7 +141,7 @@ class Virat(torch.utils.data.Dataset):
                 imgs, boxes = cv2_transform.horizontal_flip_list(
                     0.5, imgs, order="HWC", boxes=boxes
                 )
-            
+
             logger.debug("after random_horizontal_flip: {}, len(iimgs):{}".format(imgs[0].shape, len(imgs)))
         elif self._split == "val":
             # Short side to test_scale. Non-local and STRG uses 256.
@@ -179,7 +179,7 @@ class Virat(torch.utils.data.Dataset):
 
         # Convert image to CHW keeping BGR order.
         imgs = [cv2_transform.HWC2CHW(img) for img in imgs]
-        
+
         # Image [0, 255] -> [0, 1].
         imgs = [img / 255.0 for img in imgs]
 
@@ -392,7 +392,7 @@ class Virat(torch.utils.data.Dataset):
         imgs = utils.retry_load_images(
             image_paths, backend=self.cfg.VIRAT.IMG_PROC_BACKEND
         )
-        
+
         if self.cfg.VIRAT.IMG_PROC_BACKEND == "pytorch":
             # T H W C -> T C H W.
             imgs = imgs.permute(0, 3, 1, 2)

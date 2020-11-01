@@ -17,6 +17,7 @@ import slowfast.visualization.tensorboard_vis as tb
 from slowfast.datasets import loader
 from slowfast.models import build_model
 from slowfast.utils.meters import AVAMeter, TestMeter
+from slowfast.utils.virat_meters import ViratMeter
 
 logger = logging.get_logger(__name__)
 
@@ -169,7 +170,10 @@ def test(cfg):
 
     if cfg.DETECTION.ENABLE: ## False by default
         assert cfg.NUM_GPUS == cfg.TEST.BATCH_SIZE or cfg.NUM_GPUS == 0
-        test_meter = AVAMeter(len(test_loader), cfg, mode="test")
+        if cfg.TEST.DATASET == 'virat':
+            test_meter = ViratMeter(len(test_loader), cfg, mode='test')
+        else:
+            test_meter = AVAMeter(len(test_loader), cfg, mode="test")
     else:
         assert (
             len(test_loader.dataset)

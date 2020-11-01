@@ -460,7 +460,7 @@ _C.VIRAT.FRAME_LIST_DIR = '/data/virat-v2/frame_lists'
 # Directory path of frames.
 _C.VIRAT.FRAME_DIR = "/"
 
-# 
+#
 _C.VIRAT.TRAIN_GT_BOX_LISTS = ["train_annotations.csv"]
 
 _C.VIRAT.BGR = False
@@ -487,6 +487,8 @@ _C.VIRAT.TEST_LISTS = ["dev.csv"] # TODO
 _C.VIRAT.TEST_PREDICT_BOX_LISTS = ['dev_annotations.csv'] # TODO
 _C.VIRAT.FULL_TEST_ON_VAL = False # TODO
 _C.VIRAT.EXCLUSION_FILE = None
+_C.VIRAT.LABEL_MAP_FILE = ""
+_C.VIRAT.GROUNDTRUTH_FILE = ""
 
 # -----------------------------------------------------------------------------
 # AVA Dataset options
@@ -510,7 +512,7 @@ _C.AVA.ANNOTATION_DIR = (
 _C.AVA.TRAIN_LISTS = ["train.csv"]
 
 # Filenames of test samples list files.
-_C.AVA.TEST_LISTS = ["val.csv"]
+_C.AVA.TEST_LISTS = ["dev.csv"]
 
 # Filenames of box list files for training. Note that we assume files which
 # contains predicted boxes will have a suffix "predicted_boxes" in the
