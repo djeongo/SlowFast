@@ -205,8 +205,9 @@ def parse_bboxes_file(
 
                 video_name, frame_sec = row[0], int(row[1])
 
-                if frame_sec % boxes_sample_rate != 0:
-                    continue
+                if video_name in all_boxes: # ensure there is at least one bbox per video
+                    if frame_sec % boxes_sample_rate != 0:
+                        continue
 
                 # Box with format [x1, y1, x2, y2] with a range of [0, 1] as float.
                 box_key = ",".join(row[2:6])
@@ -217,7 +218,7 @@ def parse_bboxes_file(
                     all_boxes[video_name] = {}
                     # for sec in VIRAT_VALID_FRAMES:
                         # all_boxes[video_name][sec] = {}
-                
+
                 if frame_sec not in all_boxes[video_name]:
                     all_boxes[video_name][frame_sec] = {}
 

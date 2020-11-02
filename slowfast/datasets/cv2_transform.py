@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 
+import logging
 import math
 import numpy as np
 import cv2
 
+logger = logging.getLogger(__name__)
 
 def clip_boxes_to_image(boxes, height, width):
     """
@@ -795,3 +797,80 @@ def revert_scaled_boxes(size, boxes, img_height, img_width):
     scale_ratio = scaled_aspect / size
     reverted_boxes = boxes * scale_ratio
     return reverted_boxes
+
+def random_crop_list_include_boxes(images, size, pad_size=0, order="CHW", boxes=None):
+    """
+    Perform random crop on a list of images.
+    Args:
+        images (list): list of images to perform random crop.
+        size (int): size to crop.
+        pad_size (int): padding size.
+        order (str): order of the `height`, `channel` and `width`.
+        boxes (list): optional. Corresponding boxes to images.
+            Dimension is `num boxes` x 4.
+    Returns:
+        cropped (ndarray): the cropped list of images with dimension of
+            `height` x `width` x `channel`.
+        boxes (list): optional. Corresponding boxes to images. Dimension is
+            `num boxes` x 4.
+    """
+    # explicitly dealing processing per image order to avoid flipping images.
+    if pad_size > 0:
+        images = [
+            pad_image(pad_size=pad_size, image=image, order=order)
+            for image in images
+        ]
+
+    # image format should be CHW.
+    if order == "CHW":
+        if images[0].shape[1] == size and images[0].shape[2] == size:
+            return images, boxes
+        height = images[0].shape[1]
+        width = images[0].shape[2]
+        y_offset = 0
+        if height > size:
+            y_offset = int(np.random.randint(0, height - size))
+        x_offset = 0
+        if width > size:
+            x_offset = int(np.random.randint(0, width - size))
+        cropped = [
+            image[:, y_offset : y_offset + size, x_offset : x_offset + size]
+            for image in images
+        ]
+        assert cropped[0].shape[1] == size, "Image not cropped properly"
+        assert cropped[0].shape[2] == size, "Image not cropped properly"
+    elif order == "HWC":
+        if images[0].shape[0] == size and images[0].shape[1] == size:
+            return images, boxes
+        height = images[0].shape[0]
+        width = images[0].shape[1]
+
+        x1_min = np.min(boxes[0][:,0])
+        y1_min = np.min(boxes[0][:,1])
+        x2_max = np.max(boxes[0][:,2])
+        y2_max = np.max(boxes[0][:,3])
+        a = int(max(x2_max - size, 0))
+        b = int(min(x1_min, width-size))
+        # logger.info('boxes: {}'.format(boxes[0]))
+        # logger.info('a, b: {}, {}'.format(a, b))
+        if a >= b:
+            x_offset = int(a)
+        else:
+            x_offset = np.random.randint(a, b)
+        a = int(max(y2_max - size, 0))
+        b = int(min(y1_min, height-size))
+        # logger.info('a, b: {}, {}'.format(a, b))
+        if a >= b:
+            y_offset = int(a)
+        else:
+            y_offset = np.random.randint(a, b)
+        cropped = [
+            image[y_offset : y_offset + size, x_offset : x_offset + size, :]
+            for image in images
+        ]
+        assert cropped[0].shape[0] == size, "Image not cropped properly"
+        assert cropped[0].shape[1] == size, "Image not cropped properly"
+
+    if boxes is not None:
+        boxes = [crop_boxes(proposal, x_offset, y_offset) for proposal in boxes]
+    return cropped, boxes

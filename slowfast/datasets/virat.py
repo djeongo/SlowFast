@@ -64,8 +64,8 @@ class Virat(torch.utils.data.Dataset):
             cfg, mode=self._split
         )
 
-        logger.debug('len(boxes_and_labels): {}'.format(len(boxes_and_labels)))
-        logger.debug('len(self._image_paths): {}'.format(len(self._image_paths)))
+        logger.info('len(boxes_and_labels): {}'.format(len(boxes_and_labels)))
+        logger.info('len(self._image_paths): {}'.format(len(self._image_paths)))
         assert len(boxes_and_labels) == len(self._image_paths)
 
         boxes_and_labels = [
@@ -132,7 +132,7 @@ class Virat(torch.utils.data.Dataset):
             #     max_size=self._jitter_max_scale,
             #     boxes=boxes,
             # )
-            imgs, boxes = cv2_transform.random_crop_list(
+            imgs, boxes = cv2_transform.random_crop_list_include_boxes(
                 imgs, self._crop_size, order="HWC", boxes=boxes
             )
 
@@ -209,14 +209,14 @@ class Virat(torch.utils.data.Dataset):
             )
 
         # Normalize images by mean and std.
-        imgs = [
-            cv2_transform.color_normalization(
-                img,
-                np.array(self._data_mean, dtype=np.float32),
-                np.array(self._data_std, dtype=np.float32),
-            )
-            for img in imgs
-        ]
+        # imgs = [
+        #     cv2_transform.color_normalization(
+        #         img,
+        #         np.array(self._data_mean, dtype=np.float32),
+        #         np.array(self._data_std, dtype=np.float32),
+        #     )
+        #     for img in imgs
+        # ]
 
         logger.debug("After Normalize images by mean and std.: {}, len(imgs): {}".format(imgs[0].shape, len(imgs)))
 
@@ -418,7 +418,7 @@ class Virat(torch.utils.data.Dataset):
                 # if label == -1:
                 #     continue
                 # assert label >= 1 and label <= 80
-                label_arrs[i][label] = 1
+                label_arrs[i][label-1] = 1
         logger.debug("Before utils.pack_pathway_output: {}".format(imgs.shape))
         imgs = utils.pack_pathway_output(self.cfg, imgs)
         metadata = [[video_idx, sec]] * len(boxes)

@@ -19,6 +19,7 @@ import slowfast.visualization.tensorboard_vis as tb
 from slowfast.datasets import loader
 from slowfast.models import build_model
 from slowfast.utils.meters import AVAMeter, TrainMeter, ValMeter
+from slowfast.utils.virat_meters import ViratMeter
 from slowfast.utils.multigrid import MultigridSchedule
 
 
@@ -48,8 +49,6 @@ def train_epoch(
     data_size = len(train_loader)
     logger.info("type(train_loader): {}, len:{}".format(type(train_loader), len(train_loader)))
     for cur_iter, (inputs, labels, _, meta) in enumerate(train_loader):
-        logger.info("cur_iter: {}".format(cur_iter))
-        logger.info("labels_shape: {}".format(labels.shape))
         # Transfer the data to the current GPU device.
         if cfg.NUM_GPUS:
             if isinstance(inputs, (list,)):
@@ -403,8 +402,12 @@ def train(cfg):
 
     # Create meters.
     if cfg.DETECTION.ENABLE:
-        train_meter = AVAMeter(len(train_loader), cfg, mode="train")
-        val_meter = AVAMeter(len(val_loader), cfg, mode="val")
+        if cfg.TRAIN.DATASET == 'virat':
+            train_meter = ViratMeter(len(train_loader), cfg, mode="train")
+            val_meter = ViratMeter(len(val_loader), cfg, mode="val")
+        else:
+            train_meter = AVAMeter(len(train_loader), cfg, mode="train")
+            val_meter = AVAMeter(len(val_loader), cfg, mode="val")
     else:
         train_meter = TrainMeter(len(train_loader), cfg)
         val_meter = ValMeter(len(val_loader), cfg)
@@ -421,7 +424,6 @@ def train(cfg):
     logger.info("Start epoch: {}".format(start_epoch + 1))
 
     for cur_epoch in range(start_epoch, cfg.SOLVER.MAX_EPOCH):
-        logger.info("cfg.MULTIGRID.LONG_CYCLE: {}".format(cfg.MULTIGRID.LONG_CYCLE))
         if cfg.MULTIGRID.LONG_CYCLE:
             cfg, changed = multigrid.update_long_cycle(cfg, cur_epoch)
             if changed:
