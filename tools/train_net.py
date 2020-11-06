@@ -44,10 +44,9 @@ def train_epoch(
             to writer Tensorboard log.
     """
     # Enable train mode.
-    model.train()
+    model.train() # ensure these layers are in training mode.
     train_meter.iter_tic()
     data_size = len(train_loader)
-    logger.info("type(train_loader): {}, len:{}".format(type(train_loader), len(train_loader)))
     for cur_iter, (inputs, labels, _, meta) in enumerate(train_loader):
         # Transfer the data to the current GPU device.
         if cfg.NUM_GPUS:
@@ -74,8 +73,25 @@ def train_epoch(
             preds = model(inputs, meta["boxes"])
         else:
             preds = model(inputs)
+
+        pos_weight = [
+            1557.238532,
+            883.625000,
+            1768.250000,
+            1543.072727,
+            279.740496,
+            360.378723,
+            426.828715,
+            1,
+            0.029763,
+            79.573055,
+            364.264516,
+            474.764706
+        ]
         # Explicitly declare reduction to mean.
-        loss_fun = losses.get_loss_func(cfg.MODEL.LOSS_FUNC)(reduction="mean")
+        loss_fun = losses.get_loss_func(cfg.MODEL.LOSS_FUNC)(
+            reduction="mean",
+            pos_weight=torch.tensor(pos_weight).cuda())
 
         # Compute the loss.
         loss = loss_fun(preds, labels)
@@ -392,7 +408,6 @@ def train(cfg):
 
     # Create the video train and val loaders.
     train_loader = loader.construct_loader(cfg, "train")
-    logger.info("Constructed train_loader, len:{}".format(len(train_loader)))
     val_loader = loader.construct_loader(cfg, "val")
     precise_bn_loader = (
         loader.construct_loader(cfg, "train", is_precise_bn=True)
@@ -421,8 +436,6 @@ def train(cfg):
         writer = None
 
     # Perform the training loop.
-    logger.info("Start epoch: {}".format(start_epoch + 1))
-
     for cur_epoch in range(start_epoch, cfg.SOLVER.MAX_EPOCH):
         if cfg.MULTIGRID.LONG_CYCLE:
             cfg, changed = multigrid.update_long_cycle(cfg, cur_epoch)
