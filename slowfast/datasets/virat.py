@@ -13,6 +13,7 @@ from .build import DATASET_REGISTRY
 
 logger = logging.getLogger(__name__)
 
+import cv2
 
 @DATASET_REGISTRY.register()
 class Virat(torch.utils.data.Dataset):
@@ -114,7 +115,7 @@ class Virat(torch.utils.data.Dataset):
             boxes (ndarray): preprocessed boxes.
         """
         logger.debug("_images_and_boxes_preprocessing_cv2: imgs[0].shape: {}".format(imgs[0].shape))
-        height, width, _ = imgs[0].shape
+        height, width, _ = imgs[0].shape # HWC
 
         boxes[:, [0, 2]] *= width
         boxes[:, [1, 3]] *= height
@@ -145,29 +146,35 @@ class Virat(torch.utils.data.Dataset):
             logger.debug("after random_horizontal_flip: {}, len(iimgs):{}".format(imgs[0].shape, len(imgs)))
         elif self._split == "val":
             # Short side to test_scale. Non-local and STRG uses 256.
-            imgs = [cv2_transform.scale(self._crop_size, img) for img in imgs]
-            boxes = [
-                cv2_transform.scale_boxes(
-                    self._crop_size, boxes[0], height, width
-                )
-            ]
-            imgs, boxes = cv2_transform.spatial_shift_crop_list(
-                self._crop_size, imgs, 1, boxes=boxes
+            # imgs = [cv2_transform.scale(self._crop_size, img) for img in imgs]
+            # imgs = cv2_transform.crop_include_bbox(imgs, boxes, self._crop_size)
+            # boxes = [
+            #     cv2_transform.scale_boxes(
+            #         self._crop_size, boxes[0], height, width
+            #     )
+            # ]
+            # imgs, boxes = cv2_transform.spatial_shift_crop_list(
+            #     self._crop_size, imgs, 1, boxes=boxes
+            # )
+            imgs, boxes = cv2_transform.random_crop_list_include_boxes(
+                imgs, self._crop_size, order="HWC", boxes=boxes,
             )
-
             if self._test_force_flip:
                 imgs, boxes = cv2_transform.horizontal_flip_list(
                     1, imgs, order="HWC", boxes=boxes
                 )
         elif self._split == "test":
             # Short side to test_scale. Non-local and STRG uses 256.
-            imgs = [cv2_transform.scale(self._crop_size, img) for img in imgs]
-            boxes = [
-                cv2_transform.scale_boxes(
-                    self._crop_size, boxes[0], height, width
-                )
-            ]
-
+            # imgs = [cv2_transform.scale(self._crop_size, img) for img in imgs]
+            # imgs = cv2_transform.crop_include_bbox(imgs, boxes, self._crop_size)
+            # boxes = [
+            #     cv2_transform.scale_boxes(
+            #         self._crop_size, boxes[0], height, width
+            #     )
+            # ]
+            imgs, boxes = cv2_transform.random_crop_list_include_boxes(
+                imgs, self._crop_size, order="HWC", boxes=boxes
+            )
             if self._test_force_flip:
                 imgs, boxes = cv2_transform.horizontal_flip_list(
                     1, imgs, order="HWC", boxes=boxes
@@ -404,6 +411,7 @@ class Virat(torch.utils.data.Dataset):
             imgs = imgs.permute(1, 0, 2, 3)
         else:
             # Preprocess images and boxes
+            # write_images(video_idx, sec, imgs, boxes)
             imgs, boxes = self._images_and_boxes_preprocessing_cv2(
                 imgs, boxes=boxes
             )
@@ -426,8 +434,31 @@ class Virat(torch.utils.data.Dataset):
 
         extra_data = {
             "boxes": boxes,
-            "ori_boxes": ori_boxes,
-            "metadata": metadata, # Need to enable DETECTION
+            "ori_boxes": ori_boxes, # Collate function adds video_idx e.g., [video_idx, x, y, x, y]
+            "metadata": metadata, # Need to enable DETECTION,
+            "slowpath_imgs": imgs[0].cpu().clone()
         }
 
         return imgs, label_arrs, idx, extra_data
+
+def write_images(video_idx, sec, imgs, boxes):
+    logger.info('len(images): {}'.format(len(imgs)))
+    logger.info('len(boxes): {}'.format(len(boxes)))
+
+    img = imgs[len(imgs)-1]
+    box = boxes[0]
+
+    H, W, _ = img.shape
+    logger.info('imgs[0]: {}'.format(img.shape))
+    logger.info('boxes[0]: {}'.format(box))
+
+    x1 = min([box[0] for box in boxes])
+    y1 = min([box[1] for box in boxes])
+    x2 = max([box[2] for box in boxes])
+    y2 = max([box[3] for box in boxes])
+
+    start_point = (int(x1*W), int(y1*H))
+    end_point = (int(x2*W), int(y2*H))
+    color = (255,0,0)
+    img = cv2.rectangle(img, start_point, end_point, color, 2)
+    cv2.imwrite('/tmp/orig-{}-{}.jpg'.format(video_idx, sec),  img)

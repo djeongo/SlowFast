@@ -8,7 +8,7 @@ from fvcore.common.file_io import PathManager
 
 logger = logging.getLogger(__name__)
 
-FPS = 30
+FPS = 1
 # VIRAT_VALID_FRAMES = range(902, 1799)
 
 

@@ -7,6 +7,9 @@ import torch
 import torch.nn as nn
 from detectron2.layers import ROIAlign
 
+import slowfast.utils.logging as logging
+
+logger = logging.get_logger(__name__)
 
 class ResNetRoIHead(nn.Module):
     """
@@ -129,6 +132,99 @@ class ResNetRoIHead(nn.Module):
         x = self.act(x)
         return x
 
+
+class ResNetRoIHeadWithYolo(ResNetRoIHead):
+    def __init__(
+        self,
+        dim_in,
+        num_classes,
+        pool_size,
+        resolution,
+        scale_factor,
+        dropout_rate=0.0,
+        act_func="softmax",
+        aligned=True):
+        super(ResNetRoIHeadWithYolo, self).__init__(
+            dim_in,
+            num_classes,
+            pool_size,
+            resolution,
+            scale_factor,
+            dropout_rate,
+            act_func,
+            aligned)
+        # Same conv
+        self.conv_yolo = nn.Conv2d(
+            sum(dim_in),
+            1024,
+            kernel_size=[3,3],
+            padding = 1)
+        self.max_pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.projection_yolo = nn.Linear(7*7*1024, 4096, bias=True)
+        self.leaky_relu = nn.LeakyReLU(negative_slope=0.1)
+        C = 12
+        B = 2
+        self.final_projection_yolo = nn.Linear(4096, 7*7*(B*5+C), bias=False)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, inputs, bboxes):
+        assert (
+            len(inputs) == self.num_pathways
+        ), "Input tensor does not contain {} pathway".format(self.num_pathways)
+
+        logger.debug('inputs: {}'.format([k.shape for k in inputs]))
+
+        pool_out = []
+        temporal_pool_out = []
+        for pathway in range(self.num_pathways):
+            t_pool = getattr(self, "s{}_tpool".format(pathway))
+            out = t_pool(inputs[pathway])
+            assert out.shape[2] == 1
+            out = torch.squeeze(out, 2)
+
+            # B C H W = (?, 2048, 14, 14)
+            logger.debug("After temporal pooling: out.shape: {}".format(out.shape))
+            temporal_pool_out.append(out)
+
+            roi_align = getattr(self, "s{}_roi".format(pathway))
+            out = roi_align(out, bboxes)
+            logger.debug("After roi_align: out.shape: {}".format(out.shape))
+
+            s_pool = getattr(self, "s{}_spool".format(pathway))
+            out = s_pool(out)
+            logger.debug("After s_pool: out.shape: {}".format(out.shape))
+            pool_out.append(out)
+
+        # B C H W.
+        x = torch.cat(pool_out, 1)
+        logger.debug('pool_out: {}'.format([k.shape for k in pool_out]))
+        logger.debug("After concatenating slow & fast: x.shape: {}".format(x.shape))
+
+        # Perform dropout.
+        if hasattr(self, "dropout"):
+            x = self.dropout(x)
+
+        x = x.view(x.shape[0], -1)
+
+        x_classes = self.projection(x)
+        x_classes = self.act(x_classes)
+
+        logger.debug('temporal_pool_out: {}'.format([k.shape for k in temporal_pool_out] ))
+        x_yolo = torch.cat(temporal_pool_out, 1)
+        logger.debug("After concatenating slow & fast: x_yolo.shape: {}".format(x_yolo.shape))
+        x_yolo = self.conv_yolo(x_yolo)
+        logger.debug("After conv_yolo: x_yolo.shape: {}".format(x_yolo.shape))
+        x_yolo = self.max_pool(x_yolo)
+        logger.debug("After max_pool: x_yolo.shape: {}".format(x_yolo.shape))
+        x_yolo = x_yolo.view(x_yolo.shape[0], -1)
+        logger.debug("After view: x_yolo.shape: {}".format(x_yolo.shape))
+        x_yolo = self.projection_yolo(x_yolo)
+        x_yolo = self.leaky_relu(x_yolo)
+        logger.debug("After projection_yolo: x_yolo.shape: {}".format(x_yolo.shape))
+        x_yolo = self.final_projection_yolo(x_yolo)
+        x_yolo = self.sigmoid(x_yolo)
+        logger.debug("After final_projection_yolo: x_yolo.shape: {}".format(x_yolo.shape))
+        return x_classes, x_yolo
 
 class ResNetBasicHead(nn.Module):
     """

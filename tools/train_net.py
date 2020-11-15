@@ -22,6 +22,7 @@ from slowfast.utils.meters import AVAMeter, TrainMeter, ValMeter
 from slowfast.utils.virat_meters import ViratMeter
 from slowfast.utils.multigrid import MultigridSchedule
 
+from slowfast.utils.yolo_helper import yolo_loss
 
 logger = logging.get_logger(__name__)
 
@@ -70,7 +71,7 @@ def train_epoch(
         train_meter.data_toc()
 
         if cfg.DETECTION.ENABLE:
-            preds = model(inputs, meta["boxes"])
+            preds, yolo_output = model(inputs, meta["boxes"])
         else:
             preds = model(inputs)
 
@@ -93,8 +94,7 @@ def train_epoch(
             reduction="mean",
             pos_weight=torch.tensor(pos_weight).cuda())
 
-        # Compute the loss.
-        loss = loss_fun(preds, labels)
+        loss = loss_fun(preds, labels) + yolo_loss(yolo_output, labels, meta)
 
         # check Nan Loss.
         misc.check_nan_losses(loss)
@@ -111,7 +111,7 @@ def train_epoch(
             loss = loss.item()
 
             # Update and log stats.
-            train_meter.update_stats(None, None, None, loss, lr)
+            train_meter.update_stats(None, None, None, None, None, loss, lr)
             # write to tensorboard format if available.
             if writer is not None:
                 writer.add_scalars(
@@ -215,7 +215,7 @@ def eval_epoch(val_loader, model, val_meter, cur_epoch, cfg, writer=None):
 
         if cfg.DETECTION.ENABLE:
             # Compute the predictions.
-            preds = model(inputs, meta["boxes"])
+            preds, yolo_output = model(inputs, meta["boxes"])
             ori_boxes = meta["ori_boxes"]
             metadata = meta["metadata"]
 
@@ -231,7 +231,7 @@ def eval_epoch(val_loader, model, val_meter, cur_epoch, cfg, writer=None):
 
             val_meter.iter_toc()
             # Update and log stats.
-            val_meter.update_stats(preds, ori_boxes, metadata)
+            val_meter.update_stats(preds, ori_boxes, metadata, yolo_output, meta['boxes'], meta["slowpath_imgs"])
 
         else:
             preds = model(inputs)

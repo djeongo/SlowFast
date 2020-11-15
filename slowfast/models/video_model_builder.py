@@ -336,7 +336,7 @@ class SlowFast(nn.Module):
         )
 
         if cfg.DETECTION.ENABLE:
-            self.head = head_helper.ResNetRoIHead(
+            self.head = head_helper.ResNetRoIHeadWithYolo(
                 dim_in=[
                     width_per_group * 32,
                     width_per_group * 32 // cfg.SLOWFAST.BETA_INV,

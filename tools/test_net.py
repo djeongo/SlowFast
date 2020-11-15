@@ -69,11 +69,12 @@ def perform_test(test_loader, model, test_meter, cfg, writer=None):
 
         if cfg.DETECTION.ENABLE:
             # Compute the predictions.
-            preds = model(inputs, meta["boxes"])
+            preds, yolo_output = model(inputs, meta["boxes"])
             ori_boxes = meta["ori_boxes"]
             metadata = meta["metadata"]
 
             preds = preds.detach().cpu() if cfg.NUM_GPUS else preds.detach()
+            yolo_output = yolo_output.detach().cpu() if cfg.NUM_GPUS else yolo_output.detach()
             ori_boxes = (
                 ori_boxes.detach().cpu() if cfg.NUM_GPUS else ori_boxes.detach()
             )
@@ -88,7 +89,8 @@ def perform_test(test_loader, model, test_meter, cfg, writer=None):
 
             test_meter.iter_toc()
             # Update and log stats.
-            test_meter.update_stats(preds, ori_boxes, metadata)
+            test_meter.update_stats(
+                preds, ori_boxes, metadata, yolo_output, meta["boxes"], meta["slowpath_imgs"])
             test_meter.log_iter_stats(None, cur_iter)
         else:
             # Perform the forward pass.
