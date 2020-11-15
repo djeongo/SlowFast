@@ -23,34 +23,56 @@ def determine_grid(x_center,y_center):
 
 # Compute the loss.
 def yolo_loss(yolo_output, labels, meta):
+    yolo_output_view = yolo_output.view(-1, (B*5+C))
+    num_batch = yolo_output_view.shape[0] // (SS)
+
     H = 224
     W = 224
     boxes = meta["boxes"]
+    metadata = meta["metadata"]
+    logger.info("len(metadata): {}, len(boxes): {}".format(len(metadata), len(boxes)))
 
     x_center, y_center, w, h = to_xywh(
         boxes[:,1:2]/W, boxes[:,2:3]/H, boxes[:,3:4]/W, boxes[:,4:5]/H)
     grid = determine_grid(x_center, y_center)
 
+    # break up boxes into batch
+
+    to_batch_num={}
+    i_batch = 0
+    for _metadata in metadata:
+        _metadata = tuple(_metadata.cpu().tolist())
+        if _metadata not in to_batch_num:
+            to_batch_num[_metadata] = i_batch
+            i_batch+=1
+
+    # logger.info("to_batch_num: {}".format(to_batch_num))
+
     # x_center, y_center, w, h, C, x_center, y_center, w, h, C, p1, p2, p3, .., p12
-    yolo_labels = torch.zeros((S*S, (B*5+C))).cuda()
-    indicator_obj_bbox = torch.zeros((S*S, B)).cuda()
-    indicator_obj = torch.zeros((S*S, 1)).cuda()
+    yolo_labels = torch.zeros((num_batch, S*S, (B*5+C))).cuda()
+    indicator_obj_bbox = torch.zeros((num_batch, S*S, B)).cuda()
+    indicator_obj = torch.zeros((num_batch, S*S, 1)).cuda()
     # fill in labels
-    for idx in range(len(boxes)):
-        # Set indicator
-        indicator_obj_bbox[int(grid[idx]), 0] = 1 # Just using the first bouding box, e.g. B=1
-        indicator_obj[int(grid[idx]), 0] = 1
+    # logger.info('boxes.shape: {}'.format(boxes.shape))
+    for i_batch in range(num_batch):
+        for idx in range(len(boxes)):
+            _metadata = tuple(metadata[idx].cpu().tolist())
+            i_batch = to_batch_num[_metadata]
 
-        # Set bounding box
-        yolo_labels[int(grid[idx]),0:4] = torch.tensor([
-            x_center[idx], y_center[idx], w[idx], h[idx]])
+            # Set indicator
+            indicator_obj_bbox[i_batch, int(grid[idx]), 0] = 1 # Just using the first bouding box, e.g. B=1
+            indicator_obj[i_batch, int(grid[idx]), 0] = 1
 
-        # Set confidence
-        yolo_labels[int(grid[idx]), 4] = 1
+            # Set bounding box
+            yolo_labels[i_batch, int(grid[idx]),0:4] = torch.tensor([
+                x_center[idx], y_center[idx], w[idx], h[idx]])
 
-        # Set class prob
-        class_idx = torch.argmax(labels[idx])
-        yolo_labels[int(grid[idx]),B*5+class_idx] = 1
+            # Set confidence
+            yolo_labels[i_batch, int(grid[idx]), 4] = 1
+
+            # Set class prob
+            class_idx = torch.argmax(labels[idx])
+            yolo_labels[i_batch, int(grid[idx]),B*5+class_idx] = 1
 
     # print('preds.shape: {}'.format(preds.shape))
     # print('yolo_output.shape: {}'.format(yolo_output.shape))
@@ -58,10 +80,15 @@ def yolo_loss(yolo_output, labels, meta):
     # print(meta['boxes'])
     # print(meta['ori_boxes'])
 
-    yolo_output_view = yolo_output.view(-1, (B*5+C))
+
 
     lambda_coord = 5
     lambda_noobj = 0.5
+
+    yolo_labels = yolo_labels.view(-1, (B*5+C))
+    indicator_obj_bbox = indicator_obj_bbox.view(-1, B)
+    indicator_obj = indicator_obj.view(-1, 1)
+
     X = yolo_labels[:,0:-C:5]
     X_hat = yolo_output_view[:,0:-C:5]
     Y = yolo_labels[:,1:-C:5]
@@ -75,13 +102,13 @@ def yolo_loss(yolo_output, labels, meta):
     P = yolo_labels[:,-C:]
     P_hat = yolo_output_view[:,-C:]
 
-    # print('W', W)
-    # print('W_hat', W_hat)
-    # print('H', H)
-    # print('H_hat', H_hat)
+    logger.info('W.shape: {}'.format(W.shape))
+    logger.info('W_hat.shape: {}'.format(W_hat.shape))
+    logger.info('H.shape: {}'.format(H.shape))
+    logger.info('H_hat.shape: {}'.format(H_hat.shape))
     loss1 = lambda_coord*indicator_obj_bbox*(torch.square(X-X_hat) + torch.square(Y-Y_hat))
     loss2 = lambda_coord*indicator_obj_bbox*(torch.square(torch.sqrt(W)-torch.sqrt(W_hat)) + torch.square(torch.sqrt(H)-torch.sqrt(H_hat)))
-    loss3 = indicator_obj_bbox*torch.square(C-C_hat)
+    loss3 = indicator_obj_bbox*torch.square(_C-C_hat)
     loss4 = lambda_noobj*(1-indicator_obj_bbox)*torch.square(_C-C_hat)
     loss5 = indicator_obj*torch.square(P-P_hat)
     return loss1.sum() + loss2.sum() + loss3.sum() + loss4.sum() + loss5.sum()

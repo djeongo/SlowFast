@@ -159,7 +159,7 @@ def evaluate_yolo(all_yolo_outputs, all_ori_boxes, all_metadata, all_boxes, all_
 
     for i, (index, box, img) in enumerate(zip(video_index_in_order, boxes_in_order, all_inputs)):
         if len(box) > 0:
-            logger.info('img.shaoe: {}'.format(img.shape))
+            logger.info('img.shape: {}'.format(img.shape))
             one_img = np.transpose(img[:,0,:,:].cpu().numpy(), (1,2,0))
             # logger.info(one_img.shape)
             # logger.info(one_img)
@@ -167,7 +167,7 @@ def evaluate_yolo(all_yolo_outputs, all_ori_boxes, all_metadata, all_boxes, all_
             # logger.info(box)
             start_point = (int(box[0][1]), int(box[0][2]))
             end_point = (int(box[0][3]), int(box[0][4]))
-            draw_bbox(one_img, start_point, end_point, '/tmp/{}.jpg'.format(i))
+            # draw_bbox(one_img, start_point, end_point, '/tmp/{}.jpg'.format(i))
         else:
             logger.info(f"Skipping {i}")
         # print(index, boxes)
@@ -211,6 +211,6 @@ def evaluate_yolo(all_yolo_outputs, all_ori_boxes, all_metadata, all_boxes, all_
             one_img = (255*one_img).astype(np.uint8)
             start_point = (x1_yolo*W, y1_yolo*H)
             end_point = (x2_yolo*W, y2_yolo*H)
-            draw_bbox(one_img, start_point, end_point, '/tmp/{}-yolo.jpg'.format(i))
+            # draw_bbox(one_img, start_point, end_point, '/tmp/{}-yolo.jpg'.format(i))
 
     logger.info("mAP: {}".format(np.mean(maps)))
