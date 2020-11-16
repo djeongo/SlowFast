@@ -222,7 +222,7 @@ for split in dfs_annotations_map.keys():
     print(f"Spliit: {split}, len: {len(dfs)}")
     annotation_path = f'{ANNOTATION_OUTPUT_PATH}/{dfs_annotations_map[split]["csv_annotations"]}'
     print("Writing "+annotation_path)
-    df.drop_duplicates(subset=['frame_sec']).to_csv(annotation_path, sep=',', index=False, quoting=csv.QUOTE_NONE, header=False)
+    df.drop_duplicates(subset=['video_name','frame_sec']).to_csv(annotation_path, sep=',', index=False, quoting=csv.QUOTE_NONE, header=False)
 
 print('len(VIDEO_IDS): {}'.format(len(VIDEO_IDS)))
 for split in dfs_annotations_map.keys():
