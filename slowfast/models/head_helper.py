@@ -159,8 +159,9 @@ class ResNetRoIHeadWithYolo(ResNetRoIHead):
             1024,
             kernel_size=[3,3],
             padding = 1)
-        self.max_pool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.projection_yolo = nn.Linear(7*7*1024, 4096, bias=True)
+        self.avg_pool = nn.AvgPool2d(kernel_size=14)
+        self.flatten = nn.Flatten()
+        self.projection_yolo = nn.Linear(1024, 4096, bias=True)
         self.leaky_relu = nn.LeakyReLU(negative_slope=0.1)
         C = 12
         B = 2
@@ -213,11 +214,11 @@ class ResNetRoIHeadWithYolo(ResNetRoIHead):
         x_yolo = torch.cat(temporal_pool_out, 1)
         logger.debug("After concatenating slow & fast: x_yolo.shape: {}".format(x_yolo.shape))
         x_yolo = self.conv_yolo(x_yolo)
-        logger.debug("After conv_yolo: x_yolo.shape: {}".format(x_yolo.shape))
-        x_yolo = self.max_pool(x_yolo)
-        logger.debug("After max_pool: x_yolo.shape: {}".format(x_yolo.shape))
-        x_yolo = x_yolo.view(x_yolo.shape[0], -1)
-        logger.debug("After view: x_yolo.shape: {}".format(x_yolo.shape))
+        logger.info("After conv_yolo: x_yolo.shape: {}".format(x_yolo.shape))
+        x_yolo = self.avg_pool(x_yolo)
+        logger.info("After avg_pool: x_yolo.shape: {}".format(x_yolo.shape))
+        x_yolo = self.flatten(x_yolo)
+        logger.info("After flatten: x_yolo.shape: {}".format(x_yolo.shape))
         x_yolo = self.projection_yolo(x_yolo)
         x_yolo = self.leaky_relu(x_yolo)
         logger.debug("After projection_yolo: x_yolo.shape: {}".format(x_yolo.shape))

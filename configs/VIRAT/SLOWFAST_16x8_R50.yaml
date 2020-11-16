@@ -57,7 +57,7 @@ BN:
   NORM_TYPE: sync_batchnorm
   NUM_SYNC_DEVICES: 1
 SOLVER:
-  BASE_LR: 0.375
+  BASE_LR: 0.0375
   LR_POLICY: steps_with_relative_lrs
   LRS: [1, 0.1, 0.01, 0.001, 0.0001, 0.00001]
   STEPS: [0, 41, 49]

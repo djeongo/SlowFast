@@ -177,9 +177,9 @@ def evaluate_yolo(all_yolo_outputs, all_ori_boxes, all_metadata, all_boxes, all_
     H = 224
     maps = []
     for i in range(yolo_view.shape[0]):
-        logger.info('len(boxes_in_order): {}'.format(len(boxes_in_order)))
-        logger.info('i: {}'.format(i))
-        logger.info('boxes_in_order[i]: {}'.format(boxes_in_order[i]))
+        logger.debug('len(boxes_in_order): {}'.format(len(boxes_in_order)))
+        logger.debug('i: {}'.format(i))
+        logger.debug('boxes_in_order[i]: {}'.format(boxes_in_order[i]))
         box = boxes_in_order[i][0]
         x1_true, y1_true, x2_true, y2_true = box[1]/W, box[2]/W, box[3]/H, box[4]/H
         x_center, y_center = np.mean([x1_true, x2_true]), np.mean([y1_true, y2_true])
@@ -201,8 +201,8 @@ def evaluate_yolo(all_yolo_outputs, all_ori_boxes, all_metadata, all_boxes, all_
         true_box = {'x1':x1_true, 'y1':y1_true, 'x2':x2_true, 'y2':y2_true}
         if yolo_box['x1'] < yolo_box['x2'] and yolo_box['y1'] < yolo_box['y2'] and \
             true_box['x1'] < true_box['x2'] and true_box['y1'] < true_box['y2']:
-            logger.info('box: {}'.format(box))
-            logger.info('true_box: {}'.format(true_box))
+            logger.debug('box: {}'.format(box))
+            logger.debug('true_box: {}'.format(true_box))
             iou = get_iou(true_box, yolo_box)
             logger.info('iou: {}'.format(iou))
 

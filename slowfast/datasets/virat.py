@@ -78,7 +78,7 @@ class Virat(torch.utils.data.Dataset):
         (
             self._keyframe_indices,
             self._keyframe_boxes_and_labels,
-        ) = virat_helper.get_keyframe_data(boxes_and_labels)
+        ) = virat_helper.get_keyframe_data(boxes_and_labels, self._video_idx_to_name)
 
         # Calculate the number of used boxes.
         self._num_boxes_used = virat_helper.get_num_boxes_used(

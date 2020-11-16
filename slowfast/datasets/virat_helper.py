@@ -8,9 +8,7 @@ from fvcore.common.file_io import PathManager
 
 logger = logging.getLogger(__name__)
 
-FPS = 1
-# VIRAT_VALID_FRAMES = range(902, 1799)
-
+from mytools import virat_utils
 
 def load_image_lists(cfg, is_train):
     """
@@ -114,7 +112,7 @@ def load_boxes_and_labels(cfg, mode):
     return all_boxes
 
 
-def get_keyframe_data(boxes_and_labels):
+def get_keyframe_data(boxes_and_labels, video_idx_to_name):
     """
     Getting keyframe indices, boxes and labels in the dataset.
 
@@ -128,11 +126,11 @@ def get_keyframe_data(boxes_and_labels):
             video_idx and sec_idx to a list of boxes and corresponding labels.
     """
 
-    def sec_to_frame(sec):
+    def sec_to_frame(sec, fps):
         """
         Convert time index (in second) to frame index.
         """
-        return sec * FPS
+        return int(sec * fps)
 
     keyframe_indices = []
     keyframe_boxes_and_labels = []
@@ -145,8 +143,9 @@ def get_keyframe_data(boxes_and_labels):
                 # continue
 
             if len(boxes_and_labels[video_idx][sec]) > 0:
+                fps = virat_utils.get_fps(video_idx_to_name[video_idx])
                 keyframe_indices.append(
-                    (video_idx, sec_idx, sec, sec_to_frame(sec))
+                    (video_idx, sec_idx, sec, sec_to_frame(sec, fps))
                 )
                 keyframe_boxes_and_labels[video_idx].append(
                     boxes_and_labels[video_idx][sec]

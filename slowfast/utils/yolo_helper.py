@@ -30,7 +30,7 @@ def yolo_loss(yolo_output, labels, meta):
     W = 224
     boxes = meta["boxes"]
     metadata = meta["metadata"]
-    logger.info("len(metadata): {}, len(boxes): {}".format(len(metadata), len(boxes)))
+    logger.debug("len(metadata): {}, len(boxes): {}".format(len(metadata), len(boxes)))
 
     x_center, y_center, w, h = to_xywh(
         boxes[:,1:2]/W, boxes[:,2:3]/H, boxes[:,3:4]/W, boxes[:,4:5]/H)
@@ -102,10 +102,10 @@ def yolo_loss(yolo_output, labels, meta):
     P = yolo_labels[:,-C:]
     P_hat = yolo_output_view[:,-C:]
 
-    logger.info('W.shape: {}'.format(W.shape))
-    logger.info('W_hat.shape: {}'.format(W_hat.shape))
-    logger.info('H.shape: {}'.format(H.shape))
-    logger.info('H_hat.shape: {}'.format(H_hat.shape))
+    logger.debug('W.shape: {}'.format(W.shape))
+    logger.debug('W_hat.shape: {}'.format(W_hat.shape))
+    logger.debug('H.shape: {}'.format(H.shape))
+    logger.debug('H_hat.shape: {}'.format(H_hat.shape))
     loss1 = lambda_coord*indicator_obj_bbox*(torch.square(X-X_hat) + torch.square(Y-Y_hat))
     loss2 = lambda_coord*indicator_obj_bbox*(torch.square(torch.sqrt(W)-torch.sqrt(W_hat)) + torch.square(torch.sqrt(H)-torch.sqrt(H_hat)))
     loss3 = indicator_obj_bbox*torch.square(_C-C_hat)
