@@ -94,9 +94,9 @@ def yolo_loss(yolo_output, labels, meta):
     Y = yolo_labels[:,1:-C:5]
     Y_hat = yolo_output_view[:,1:-C:5]
     W = yolo_labels[:,2:-C:5]
-    W_hat = torch.exp(yolo_output_view[:,2:-C:5])
+    W_hat = yolo_output_view[:,2:-C:5]
     H = yolo_labels[:,3:-C:5]
-    H_hat = torch.exp(yolo_output_view[:,3:-C:5]) # make it non-negative
+    H_hat = yolo_output_view[:,3:-C:5]
     _C = yolo_labels[:,4:-C:5]
     C_hat = yolo_output_view[:,4:-C:5]
     P = yolo_labels[:,-C:]
