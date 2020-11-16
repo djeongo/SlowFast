@@ -3,6 +3,7 @@
 
 """Train a video classification model."""
 
+from torchsummary import summary
 import numpy as np
 import pprint
 import torch
@@ -46,6 +47,13 @@ def train_epoch(
     """
     # Enable train mode.
     model.train() # ensure these layers are in training mode.
+
+    for name, param in model.named_parameters():
+       if param.requires_grad:
+           if name[:2] in ['s1','s2','s3','s4', 's5']:
+               param.requires_grad = False
+               logger.info("Setting requires_grad=False for {}".format(name))
+
     train_meter.iter_tic()
     data_size = len(train_loader)
     for cur_iter, (inputs, labels, _, meta) in enumerate(train_loader):
