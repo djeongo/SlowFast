@@ -195,7 +195,9 @@ def evaluate_yolo(all_yolo_outputs, all_ori_boxes, all_metadata, all_boxes, all_
         maps.append(np.mean(average_precision_scores))
 
         # Compute IOU
-        x_yolo, y_yolo, w_yolo, h_yolo = yolo_view[i, grid, 0:4]
+        x_yolo, y_yolo, w_yolo, h_yolo = yolo_view[i, grid, 0:4].cpu().numpy()
+        w_yolo = np.log(w_yolo)
+        h_yolo = np.log(h_yolo)
         x1_yolo, y1_yolo, x2_yolo, y2_yolo = x_yolo-w_yolo/2, y_yolo-h_yolo/2, x_yolo+w_yolo/2, y_yolo+h_yolo/2
         yolo_box = {'x1':x1_yolo, 'y1':y1_yolo, 'x2':x2_yolo, 'y2':y2_yolo}
         true_box = {'x1':x1_true, 'y1':y1_true, 'x2':x2_true, 'y2':y2_true}
